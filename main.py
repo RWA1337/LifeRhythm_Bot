@@ -1,18 +1,31 @@
 import os
+import threading
+from flask import Flask
 from telegram.ext import ApplicationBuilder, CommandHandler
+from telegram import Update
+from telegram.ext import ContextTypes
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # токен берём из Render
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-async def start(update, context):
-    await update.message.reply_text("👋 Привет! Я LifeRhythmBot — твой помощник по здоровью!")
+# ---- Telegram bot ----
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет! Бот запущен и работает на Render 🚀")
 
-async def help_command(update, context):
-    await update.message.reply_text("📋 Доступные команды:\n/start — начать\n/help — помощь")
+app_telegram = ApplicationBuilder().token(BOT_TOKEN).build()
+app_telegram.add_handler(CommandHandler("start", start))
 
+# ---- Flask server ----
+app_web = Flask(__name__)
+
+@app_web.route("/")
+def home():
+    return "Bot is alive!"
+
+def run_flask():
+    port = int(os.getenv("PORT", 5000))
+    app_web.run(host="0.0.0.0", port=port)
+
+# ---- Запуск ----
 if __name__ == "__main__":
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    print("✅ Бот запущен!")
-    app.run_polling()
-
+    threading.Thread(target=run_flask).start()
+    app_telegram.run_polling()
