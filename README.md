@@ -1,15 +1,14 @@
 # LifeRhythm_Bot
 
-Телеграм-бот с Flask-сервером для деплоя на Render.
+MVP Telegram-бот с функциями: профиль, биоритмы, рецепты, упражнения, йога, дыхание, расшифровка анализов, трекер воды, челленджи.
 
-## Как запустить на Render
+## Как развернуть
 
-1. Залей репозиторий на GitHub.
-2. На сайте [Render](https://render.com) создай **Web Service**.
-3. Укажи:
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `python main.py`
-4. В настройках Render добавь переменную окружения:
-   - Key: `BOT_TOKEN`
-   - Value: токен твоего бота из BotFather.
-5. Запусти деплой.
+1. Добавь файлы в репозиторий (корень + папки handlers, data).
+2. На Render — создавай **Web Service (Free)**:
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `python main.py`
+3. В Environment добавь:
+   - `BOT_TOKEN` = токен от BotFather
+   - `APP_URL` = https://<твой-subdomain>.onrender.com
+4. Deploy.
