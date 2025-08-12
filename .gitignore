@@ -1,4 +1,4 @@
-# Python
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
@@ -7,7 +7,7 @@ __pycache__/
 # Environment
 .env
 
-# IDE / Editors
+# IDE
 .vscode/
 .idea/
 
