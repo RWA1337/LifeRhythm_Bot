@@ -1,98 +1,71 @@
-# main.py — webhook версия (Flask + ручная обработка апдейтов)
 import os
-import requests
-from flask import Flask, request, jsonify
+import threading
+from flask import Flask
+from telegram.ext import Application, CommandHandler
+from config import BOT_TOKEN, APP_URL
+from db import init_db, get_conn
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# handlers imports
+from handlers.start import start as start_handler
+from handlers.help import help_command
+from handlers.profile import profile, setprofile
+from handlers.biorhythm import biorhythm
+from handlers.nutrition import nutrition, recipe
+from handlers.exercise import exercise
+from handlers.yoga import yoga
+from handlers.meditation import meditation
+from handlers.analysis import analysis
+from handlers.challenges import challenges, water, water_status
+from handlers.admin import admin_stats
+
+# init DB
+init_db()
+
+# Telegram app
 if not BOT_TOKEN:
-    raise SystemExit("BOT_TOKEN is not set")
+    raise SystemExit("BOT_TOKEN is not set in environment")
 
-# Адрес твоего сервиса на Render (пример): https://liferhythm-bot.onrender.com
-# Лучше задать в Render переменную APP_URL, если хостнейм другой.
-APP_URL = os.getenv("APP_URL", "").rstrip("/")
+app_telegram = Application.builder().token(BOT_TOKEN).build()
 
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+# register commands
+app_telegram.add_handler(CommandHandler("start", start_handler))
+app_telegram.add_handler(CommandHandler("help", help_command))
+app_telegram.add_handler(CommandHandler("profile", profile))
+app_telegram.add_handler(CommandHandler("setprofile", setprofile))
+app_telegram.add_handler(CommandHandler("biorhythm", biorhythm))
+app_telegram.add_handler(CommandHandler("nutrition", nutrition))
+app_telegram.add_handler(CommandHandler("recipe", recipe))
+app_telegram.add_handler(CommandHandler("exercise", exercise))
+app_telegram.add_handler(CommandHandler("yoga", yoga))
+app_telegram.add_handler(CommandHandler("meditation", meditation))
+app_telegram.add_handler(CommandHandler("analysis", analysis))
+app_telegram.add_handler(CommandHandler("challenges", challenges))
+app_telegram.add_handler(CommandHandler("water", water))
+app_telegram.add_handler(CommandHandler("water_status", water_status))
+app_telegram.add_handler(CommandHandler("admin_stats", admin_stats))
 
-app = Flask(__name__)
+# Flask for health (Render expects open port)
+app_web = Flask(__name__)
 
-def send_message(chat_id: int, text: str):
-    url = f"{TELEGRAM_API}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text}
-    try:
-        r = requests.post(url, json=payload, timeout=5)
-        return r.ok, r.text
-    except Exception as e:
-        return False, str(e)
+@app_web.route("/")
+def home():
+    return "Bot is alive!"
 
-@app.route("/", methods=["GET"])
-def index():
-    return "Bot is alive!", 200
-
-# Telegram will POST updates here. We set webhook to https://<your-domain>/<BOT_TOKEN>
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def telegram_webhook():
-    data = request.get_json(force=True)
-    # quickly respond 200 to Telegram
-    # parse incoming message if present
-    if not data:
-        return jsonify({"ok": False, "reason": "no json"}), 400
-
-    # Handle message updates
-    msg = data.get("message") or data.get("edited_message")
-    if msg:
-        chat = msg.get("chat", {})
-        chat_id = chat.get("id")
-        text = msg.get("text", "")
-        if text is None:
-            # not text (sticker, photo...), ignore for now
-            return jsonify({"ok": True}), 200
-
-        text = text.strip()
-        # Simple command handling
-        if text.startswith("/start"):
-            send_message(chat_id, "👋 Привет! Я LifeRhythm — твой помощник по здоровью. Напиши /help.")
-        elif text.startswith("/help"):
-            send_message(chat_id,
-                "Доступные команды:\n"
-                "/start — начать\n"
-                "/help — помощь\n"
-                "/ping — проверка бота")
-        elif text.startswith("/ping"):
-            send_message(chat_id, "pong")
-        else:
-            # default small reply — можно расширить
-            send_message(chat_id, "Я получил сообщение: " + (text[:300] if text else "<пусто>"))
-
-    # you can also handle callback_query etc. here later
-    return jsonify({"ok": True}), 200
-
-# helper endpoints
-@app.route("/set_webhook", methods=["GET"])
-def set_webhook():
-    # must be called once after deploy OR Render will call it on startup below
-    if not APP_URL:
-        return "APP_URL not set", 400
-    webhook_url = f"{APP_URL}/{BOT_TOKEN}"
-    resp = requests.post(f"{TELEGRAM_API}/setWebhook", json={"url": webhook_url, "allowed_updates": ["message","edited_message"]}, timeout=10)
-    return jsonify({"setWebhook_resp": resp.json()}), 200
-
-@app.route("/get_webhook_info", methods=["GET"])
+@app_web.route("/get_webhook_info")
 def get_webhook_info():
-    resp = requests.get(f"{TELEGRAM_API}/getWebhookInfo", timeout=10)
-    return jsonify(resp.json()), 200
+    # helper: not using webhook flow here, but keep endpoint
+    return "OK"
+
+def run_flask():
+    port = int(os.getenv("PORT", 5000))
+    app_web.run(host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
-    # Try to set webhook on start if APP_URL provided
-    if APP_URL:
-        try:
-            webhook_url = f"{APP_URL}/{BOT_TOKEN}"
-            print("Setting webhook to", webhook_url)
-            r = requests.post(f"{TELEGRAM_API}/setWebhook", json={"url": webhook_url, "allowed_updates": ["message","edited_message"]}, timeout=10)
-            print("setWebhook response:", r.status_code, r.text)
-        except Exception as e:
-            print("Failed to set webhook on startup:", e)
+    t = threading.Thread(target=run_flask)
+    t.start()
+    # start polling (works with Render + Flask thread)
+    app_telegram.run_polling()
 
-    port = int(os.getenv("PORT", 5000))
-    # start Flask (Render detects the open port)
     app.run(host="0.0.0.0", port=port)
+
 
